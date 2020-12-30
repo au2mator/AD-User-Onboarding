@@ -1,16 +1,23 @@
 #########
 # au2mator PS Services
-# New Service
-# Active Directory - User Onboarding
-# v 1.0 Initial Release
-# Init Release: 22.08.2020
-# Last Update: 22.08.2020
-# Code Template V 1.2
-# URL: 
-# Github: 
-# au2mator 4.x or above
+# Type: New Service
 #
-##################
+# Title: AD - User Onboarding
+#
+# v 1.0 Initial Release
+# v 1.1 Added Stored Credentials
+#       see for details: https://au2mator.com/documentation/powershell-credentials/?utm_source=github&utm_medium=social&utm_campaign=AD_UserOnboarding&utm_content=PS1
+# v 1.1 Added SMTP Port
+# v 1.2 applied v1.3 Template, code designs, Powershell 7 ready, au2mator 4.0
+#
+# Init Release: 22.08.2020
+# Last Update: 29.12.2020
+# Code Template V 1.3
+#
+# URL: 
+# Github: https://github.com/au2mator/AD-User-Onboarding
+#################
+
 
 
 
@@ -87,27 +94,25 @@ param (
 
 
 #region Variables
-##Script Handling
+Set-ExecutionPolicy -ExecutionPolicy Bypass
 $DoImportPSSession = $false
-$ErrorCount = 0
-#$ErrorActionPreference = "SilentlyContinue"
+
 
 ## Environment
 [string]$DCServer = 'svdc01'
 [string]$LogPath = "C:\_SCOworkingDir\TFS\PS-Services\AD - User Onboarding"
 [string]$LogfileName = "User Onboarding"
 
-[string]$CredentialStorePath = "C:\_SCOworkingDir\TFS\PS-Services\CredentialStore" #see for details: https://au2mator.com/documentation/powershell-credentials/
+[string]$CredentialStorePath = "C:\_SCOworkingDir\TFS\PS-Services\CredentialStore" #see for details: https://au2mator.com/documentation/powershell-credentials/?utm_source=github&utm_medium=social&utm_campaign=AD_UserOnboarding&utm_content=PS1
 
 
-#Used PowerShell Modules
-$Modules = @("ActiveDirectory")
+$Modules = @("ActiveDirectory") #$Modules = @("ActiveDirectory", "SharePointPnPPowerShellOnline")
 
 
 ## au2mator Settings
 [string]$PortalURL = "http://demo01.au2mator.local"
 [string]$au2matorDBServer = "demo01"
-[string]$au2matorDBName = "au2matorNew"
+[string]$au2matorDBName = "au2mator40Demo2"
 
 ## Control Mail
 $SendMailToInitiatedByUser = $true #Send a Mail after Service is completed
@@ -117,13 +122,13 @@ $SendMailToTargetUser = $true #Send Mail to Target User after Service is complet
 $SMTPServer = "smtp.office365.com"
 $SMPTAuthentication = $true #When True, User and Password needed
 $EnableSSLforSMTP = $true
-$SMTPSender = "michael.seidl@au2mator.com"
+$SMTPSender = "SelfService@au2mator.com"
 $SMTPPort="587"
 
+# Stored Credentials
+# See: https://au2mator.com/documentation/powershell-credentials/?utm_source=github&utm_medium=social&utm_campaign=AD_UserOnboarding&utm_content=PS1
 $SMTPCredential_method = "Stored" #Stored, Manual
-#Use stored Credentials
 $SMTPcredential_File = "SMTPCreds.xml"
-#Use Manual Credentials
 $SMTPUser = ""
 $SMTPPassword = ""
 
@@ -136,87 +141,30 @@ if ($SMTPCredential_method -eq "Manual") {
     $SMTPcredential = New-Object System.Management.Automation.PSCredential ($SMTPUser, $f_secpasswd)
 }
 
-
-#CustomVariables
-$O365credential_File = "Office365Creds.xml"
-$O365credential = Import-CliXml -Path (Get-ChildItem -Path $CredentialStorePath -Filter $O365credential_File).FullName
-$Exchangecredential_File = "ExchangeCreds.xml"
-$Exchangecredential = Import-CliXml -Path (Get-ChildItem -Path $CredentialStorePath -Filter $Exchangecredential_File).FullName
-
-
-
-$ADPassword = "SuperS3cur3PW2020!!"
-$AzureADSyncServer="rwsaad01.work.td.local"
-
-
 #endregion Variables
 
+
+#region CustomVaribles
+$O365credential
+$O365credential_method = "Stored" #Stored, Manual
+$O365credential_File = "O365Creds.xml"
+$O365credentialUser = ""
+$O365credentialPassword = ""
+
+if ($O365credential_method -eq "Stored") {
+    $O365credential = Import-CliXml -Path (Get-ChildItem -Path $CredentialStorePath -Filter $O365credential_File).FullName
+}
+
+if ($O365credential_method -eq "Manual") {
+    $f_secpasswd = ConvertTo-SecureString $O365credentialPassword -AsPlainText -Force
+    $O365credential = New-Object System.Management.Automation.PSCredential ($O365credentialUser, $f_secpasswd)
+}
+
+
+
+#endregion CustomVaribles
+
 #region Functions
-
-function ConnectToDB {
-    # define parameters
-    param(
-        [string]
-        $servername,
-        [string]
-        $database
-    )
-    # create connection and save it as global variable
-    $global:Connection = New-Object System.Data.SQLClient.SQLConnection
-    $Connection.ConnectionString = "server='$servername';database='$database';trusted_connection=false; integrated security='true'"
-    $Connection.Open()
-    Write-Verbose 'Connection established'
-}
-# function that executes sql commands against an existing Connection object; In pur case
-# the connection object is saved by the ConnectToDB function as a global variable
-function ExecuteSqlQuery {
-    # define parameters
-    param(
-
-        [string]
-        $sqlquery
-
-    )
-
-    Begin {
-        If (!$Connection) {
-            Throw "No connection to the database detected. Run command ConnectToDB first."
-        }
-        elseif ($Connection.State -eq 'Closed') {
-            Write-Verbose 'Connection to the database is closed. Re-opening connection...'
-            try {
-                # if connection was closed (by an error in the previous script) then try reopen it for this query
-                $Connection.Open()
-            }
-            catch {
-                Write-Verbose "Error re-opening connection. Removing connection variable."
-                Remove-Variable -Scope Global -Name Connection
-                throw "Unable to re-open connection to the database. Please reconnect using the ConnectToDB commandlet. Error is $($_.exception)."
-            }
-        }
-    }
-
-    Process {
-        #$Command = New-Object System.Data.SQLClient.SQLCommand
-        $command = $Connection.CreateCommand()
-        $command.CommandText = $sqlquery
-
-        Write-Verbose "Running SQL query '$sqlquery'"
-        try {
-            $result = $command.ExecuteReader()
-        }
-        catch {
-            $Connection.Close()
-        }
-        $Datatable = New-Object "System.Data.Datatable"
-        $Datatable.Load($result)
-        return $Datatable
-    }
-    End {
-        Write-Verbose "Finished running SQL query."
-    }
-}
-
 function Write-au2matorLog {
     [CmdletBinding()]
     param
@@ -244,26 +192,94 @@ function Write-au2matorLog {
     Add-Content -Path $logFile -Value $logEntry
 }
 
+function ConnectToDB {
+    # define parameters
+    param(
+        [string]
+        $servername,
+        [string]
+        $database
+    )
+    Write-au2matorLog -Type INFO -Text "Function ConnectToDB"
+    # create connection and save it as global variable
+    $global:Connection = New-Object System.Data.SQLClient.SQLConnection
+    $Connection.ConnectionString = "server='$servername';database='$database';trusted_connection=false; integrated security='true'"
+    $Connection.Open()
+    Write-au2matorLog -Type INFO -Text 'Connection established'
+}
+
+function ExecuteSqlQuery {
+    # define parameters
+    param(
+
+        [string]
+        $sqlquery
+
+    )
+    Write-au2matorLog -Type INFO -Text "Function ExecuteSqlQuery"
+    #Begin {
+    If (!$Connection) {
+        Write-au2matorLog -Type WARNING -Text"No connection to the database detected. Run command ConnectToDB first."
+    }
+    elseif ($Connection.State -eq 'Closed') {
+        Write-au2matorLog -Type INFO -Text 'Connection to the database is closed. Re-opening connection...'
+        try {
+            # if connection was closed (by an error in the previous script) then try reopen it for this query
+            $Connection.Open()
+        }
+        catch {
+            Write-au2matorLog -Type INFO -Text "Error re-opening connection. Removing connection variable."
+            Remove-Variable -Scope Global -Name Connection
+            Write-au2matorLog -Type WARNING -Text "Unable to re-open connection to the database. Please reconnect using the ConnectToDB commandlet. Error is $($_.exception)."
+        }
+    }
+    #}
+
+    #Process {
+    #$Command = New-Object System.Data.SQLClient.SQLCommand
+    $command = $Connection.CreateCommand()
+    $command.CommandText = $sqlquery
+
+    Write-au2matorLog -Type INFO -Text "Running SQL query '$sqlquery'"
+    try {
+        $result = $command.ExecuteReader()
+    }
+    catch {
+        $Connection.Close()
+    }
+    $Datatable = New-Object "System.Data.Datatable"
+    $Datatable.Load($result)
+
+    return $Datatable
+
+    #}
+
+    #End {
+    Write-au2matorLog -Type INFO -Text "Finished running SQL query."
+    #}
+}
+
 function Get-UserInput ($RequestID) {
     [hashtable]$return = @{ }
 
+    Write-au2matorLog -Type INFO -Text "Function Get-UserInput"
     ConnectToDB -servername $au2matorDBServer -database $au2matorDBName
 
     $Result = ExecuteSqlQuery -sqlquery "SELECT        RPM.Text AS Question, RP.Value
     FROM            dbo.Requests AS R INNER JOIN
                              dbo.RunbookParameterMappings AS RPM ON R.ServiceId = RPM.ServiceId INNER JOIN
-                             dbo.RequestParameters AS RP ON RPM.ParameterName = RP.[Key] AND R.RequestId = RP.RequestId
-    where RP.RequestId = '$RequestID' order by [Order]"
+                             dbo.RequestParameters AS RP ON RPM.ParameterName = RP.[Key] AND R.ID = RP.RequestId
+    where RP.RequestId = '$RequestID' and rpm.IsDeleted = '0' order by [Order]"
 
     $html = "<table><tr><td><b>Question</b></td><td><b>Answer</b></td></tr>"
     $html = "<table>"
     foreach ($row in $Result) {
-        $row
-        $html += "<tr><td><b>" + $row.Question + "</b></td><td>" + $row.Value + "</td></tr>"
+        #$row
+        $html += "<tr><td><b>" + $row.Question + ":</b></td><td>" + $row.Value + "</td></tr>"
     }
     $html += "</table>"
 
-    $f_RequestInfo = ExecuteSqlQuery -sqlquery "select InitiatedBy, TargetUserId,[ApprovedBy], [ApprovedTime], Comment from Requests where RequestId =  '$RequestID'"
+    $f_RequestInfo = ExecuteSqlQuery -sqlquery "select InitiatedBy, TargetUserId,[ApprovedBy], [ApprovedTime], Comment from Requests where Id =  '$RequestID'"
 
     $Connection.Close()
     Remove-Variable -Scope Global -Name Connection
@@ -275,11 +291,11 @@ function Get-UserInput ($RequestID) {
     $f_SamTarget = $f_RequestInfo.TargetUserId.Split("\")[1]
     $f_UserTarget = Get-ADUser -Identity $f_SamTarget -Properties Mail
 
-    $return.InitiatedBy = $f_RequestInfo.InitiatedBy
-    $return.MailInitiatedBy = $f_UserInitiatedBy.mail
-    $return.MailTarget = $f_UserTarget.mail
-    $return.TargetUserId = $f_RequestInfo.TargetUserId
-    $return.ApprovedBy = $f_RequestInfo.ApprovedBy
+    $return.InitiatedBy = $f_RequestInfo.InitiatedBy.trim()
+    $return.MailInitiatedBy = $f_UserInitiatedBy.mail.trim()
+    $return.MailTarget = $f_UserTarget.mail.trim()
+    $return.TargetUserId = $f_RequestInfo.TargetUserId.trim()
+    $return.ApprovedBy = $f_RequestInfo.ApprovedBy.trim()
     $return.ApprovedTime = $f_RequestInfo.ApprovedTime
     $return.Comment = $f_RequestInfo.Comment
     $return.HTML = $HTML
@@ -289,14 +305,21 @@ function Get-UserInput ($RequestID) {
 
 Function Get-MailContent ($RequestID, $RequestTitle, $EndDate, $TargetUserId, $InitiatedBy, $Status, $PortalURL, $RequestedBy, $AdditionalHTML, $InputHTML) {
 
+    Write-au2matorLog -Type INFO -Text "Function Get-MailContent"
     $f_RequestID = $RequestID
     $f_InitiatedBy = $InitiatedBy
 
     $f_RequestTitle = $RequestTitle
-    $f_EndDate = $EndDate
+
+    try {
+        $f_EndDate = (get-Date -Date $EndDate -Format (Get-Culture).DateTimeFormat.ShortDatePattern) + " (" + (get-Date -Date $EndDate -Format (Get-Culture).DateTimeFormat.ShortTimePattern) + ")"
+    }
+    catch {
+        $f_EndDate = $EndDate
+    }
+
     $f_RequestStatus = $Status
     $f_RequestLink = "$PortalURL/requeststatus?id=$RequestID"
-    $f_RequestedBy = $RequestedBy
     $f_HTMLINFO = $AdditionalHTML
     $f_InputHTML = $InputHTML
 
@@ -360,8 +383,7 @@ Function Get-MailContent ($RequestID, $RequestTitle, $EndDate, $TargetUserId, $I
     <tbody>
     <tr style="mso-yfti-irow: 0; mso-yfti-firstrow: yes; mso-yfti-lastrow: yes;">
     <td style="width: 100.0%; border: solid #E3E3E3 1.0pt; mso-border-alt: solid #E3E3E3 .75pt; padding: 7.5pt 0cm 1.5pt 3.75pt;" width="100%">
-    <p style="text-align: center;" align="center"><span style="font-size: 10.5pt; color: #959595;">Request ID</span></p>
-    <p class="MsoNormal" style="text-align: center;" align="center">&nbsp;</p>
+    <p style="text-align: center;" align="center"><span style="font-size: 10.5pt; color: #959595;">au2mator Request ID</span></p>
     <p style="text-align: center;" align="center"><u><span style="font-size: 12.0pt; color: black;"><a href="##RequestLink"><span style="color: black;">##REQUESTID</span></a></span></u></p>
     <p class="MsoNormal" style="text-align: center;" align="center"><span style="mso-fareast-font-family: 'Times New Roman';">&nbsp;</span></p>
     </td>
@@ -389,9 +411,9 @@ Function Get-MailContent ($RequestID, $RequestTitle, $EndDate, $TargetUserId, $I
     </tr>
     <tr style="mso-yfti-irow: 1; box-sizing: border-box;">
     <td style="padding: 0cm 0cm 15.0pt 0cm; box-sizing: border-box;" valign="top">
-    <p class="MsoNormal" style="line-height: 19.2pt;"><span style="font-size: 10.5pt; font-family: 'Helvetica',sans-serif; mso-fareast-font-family: 'Times New Roman';">the Request <strong>"##RequestTitle"</strong> has been finished.<br /> <br /> Please see the description for detailed information.<br /><b>##HTMLINFO</b><br /></span></p>
+    <p class="MsoNormal" style="line-height: 19.2pt;"><span style="font-size: 10.5pt; font-family: 'Helvetica',sans-serif; mso-fareast-font-family: 'Times New Roman';">We finished the Request <strong>"##RequestTitle"</strong>!<br /> <br /> Here are the Result of the Request:<br /><b>##HTMLINFO&nbsp;</b><br /></span></p>
     <div>&nbsp;</div>
-    <div>See the Details of the Request</div>
+    <div>See the details of the Request</div>
     <div>##InputHTML</div>
     <div>&nbsp;</div>
     <div>&nbsp;</div>
@@ -431,54 +453,111 @@ Function Get-MailContent ($RequestID, $RequestTitle, $EndDate, $TargetUserId, $I
     <p class="MsoNormal"><span style="mso-fareast-font-family: 'Times New Roman';">&nbsp;</span></p>
 '@
 
-    $html = $html.replace('##REQUESTID', $f_RequestID).replace('##UserDisplayname', $f_DisplaynameInitiatedBy).replace('##RequestTitle', $f_RequestTitle).replace('##EndDate', $f_EndDate).replace('##Status', $f_RequestStatus).replace('##RequestedBy', $f_RequestedBy).replace('##HTMLINFO', $f_HTMLINFO).replace('##InputHTML', $f_InputHTML).replace('##RequestLink', $f_RequestLink)
+    $html = $html.replace('##REQUESTID', $f_RequestID).replace('##UserDisplayname', $f_DisplaynameInitiatedBy).replace('##RequestTitle', $f_RequestTitle).replace('##EndDate', $f_EndDate).replace('##Status', $f_RequestStatus).replace('##RequestedBy', $f_InitiatedBy).replace('##HTMLINFO', $f_HTMLINFO).replace('##InputHTML', $f_InputHTML).replace('##RequestLink', $f_RequestLink)
 
     return $html
 }
 
-
-function Send-ServiceMail ($HTMLBody, $ServiceName, $Recipient, $RequestID, $RequestStatus) {
+Function Send-ServiceMail ($HTMLBody, $ServiceName, $Recipient, $RequestID, $RequestStatus) {
+    Write-au2matorLog -Type INFO -Text "Function Send-ServiceMail"
     $f_Subject = "au2mator - $ServiceName Request [$RequestID] - $RequestStatus"
+    Write-au2matorLog -Type INFO -Text "Subject:  $f_Subject "
+    Write-au2matorLog -Type INFO -Text "Recipient: $Recipient"
 
-    if ($SMPTAuthentication) {
-        if ($EnableSSLforSMTP) {
-            Send-MailMessage -SmtpServer $SMTPServer -To $Recipient -From $SMTPSender -Subject $f_Subject -Body $HTMLBody -BodyAsHtml -Priority high -Credential $SMTPcredential -UseSs -Port $SMTPPort
+    try {
+        if ($SMPTAuthentication) {
+
+            if ($EnableSSLforSMTP) {
+                Write-au2matorLog -Type INFO -Text "Run SMTP with Authentication and SSL"
+                Send-MailMessage -SmtpServer $SMTPServer -To $Recipient -From $SMTPSender -Subject $f_Subject -Body $HTMLBody -BodyAsHtml -Priority high -Credential $SMTPcredential -UseSsl -Port $SMTPPort
+            }
+            else {
+                Write-au2matorLog -Type INFO -Text "Run SMTP with Authentication and no SSL"
+                Send-MailMessage -SmtpServer $SMTPServer -To $Recipient -From $SMTPSender -Subject $f_Subject -Body $HTMLBody -BodyAsHtml -Priority high -Credential $SMTPcredential -Port $SMTPPort
+            }
         }
         else {
-            Send-MailMessage -SmtpServer $SMTPServer -To $Recipient -From $SMTPSender -Subject $f_Subject -Body $HTMLBody -BodyAsHtml -Priority high -Credential $SMTPcredential -Port $SMTPPort
+
+            if ($EnableSSLforSMTP) {
+                Write-au2matorLog -Type INFO -Text "Run SMTP without Authentication and SSL"
+                Send-MailMessage -SmtpServer $SMTPServer -To $Recipient -From $SMTPSender -Subject $f_Subject -Body $HTMLBody -BodyAsHtml -Priority high -UseSsl -Port $SMTPPort
+            }
+            else {
+                Write-au2matorLog -Type INFO -Text "Run SMTP without Authentication and no SSL"
+                Send-MailMessage -SmtpServer $SMTPServer -To $Recipient -From $SMTPSender -Subject $f_Subject -Body $HTMLBody -BodyAsHtml -Priority high -Port $SMTPPort
+            }
         }
     }
-    else {
-        if ($EnableSSLforSMTP) {
-            Send-MailMessage -SmtpServer $SMTPServer -To $Recipient -From $SMTPSender -Subject $f_Subject -Body $HTMLBody -BodyAsHtml -Priority high -UseSsl -Port $SMTPPort
-        }
-        else {
-            Send-MailMessage -SmtpServer $SMTPServer -To $Recipient -From $SMTPSender -Subject $f_Subject -Body $HTMLBody -BodyAsHtml -Priority high -Port $SMTPPort
-        }
+    catch {
+        Write-au2matorLog -Type WARNING -Text "Error on sending Mail"
+        Write-au2matorLog -Type WARNING -Text $Error
     }
+
 }
 #endregion Functions
 
 
+#region CustomFunctions
+
+
+#endregion CustomFunctions
+
+
 #region Script
-
-
 Write-au2matorLog -Type INFO -Text "Start Script"
+
+
 if ($DoImportPSSession) {
 
     Write-au2matorLog -Type INFO -Text "Import-Pssession"
     $PSSession = New-PSSession -ComputerName $DCServer
-    Import-PSSession -Session $PSSession -DisableNameChecking -AllowClobber
-}
-else {
-
+    Import-PSSession -Session $PSSession -DisableNameChecking -AllowClobber 
 }
 
-Write-au2matorLog -Type INFO -Text "Import AD PS Module"
-Import-Module ActiveDirectory
+#Check for Modules if installed
+Write-au2matorLog -Type INFO -Text "Try to install all PowerShell Modules"
+foreach ($Module in $Modules) {
+    if (Get-Module -ListAvailable -Name $Module) {
+        Write-au2matorLog -Type INFO -Text "Module is already installed:  $Module"
+    }
+    else {
+        Write-au2matorLog -Type INFO -Text "Module is not installed, try simple method:  $Module"
+        try {
+
+            Install-Module $Module -Force -Confirm:$false
+            Write-au2matorLog -Type INFO -Text "Module was installed the simple way:  $Module"
+
+        }
+        catch {
+            Write-au2matorLog -Type INFO -Text "Module is not installed, try the advanced way:  $Module"
+            try {
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                Install-PackageProvider -Name NuGet  -MinimumVersion 2.8.5.201 -Force
+                Install-Module $Module -Force -Confirm:$false
+                Write-au2matorLog -Type INFO -Text "Module was installed the advanced way:  $Module"
+
+            }
+            catch {
+                Write-au2matorLog -Type ERROR -Text "could not install module:  $Module"
+                $au2matorReturn = "could not install module:  $Module, Error: $Error"
+                $AdditionalHTML = "could not install module:  $Module, Error: $Error
+                "
+                $Status = "ERROR"
+            }
+        }
+    }
+    Write-au2matorLog -Type INFO -Text "Import Module:  $Module"
+    Import-module $Module
+}
+
+#region CustomCode
+Write-au2matorLog -Type INFO -Text "Start Custom Code"
 
 
 Write-au2matorLog -Type INFO -Text "Define all Values"
+
+$ADPassword="SuperSaf3Pass!"
+$AzureADSyncServer="demo01"
 
 $ADFirstName = $c_Firstname
 $ADLastName = $c_LastName
@@ -492,10 +571,6 @@ $ADTelephone = $c_Telephone
 $ADMail = "$c_Firstname.$c_LastName" + "@" + "$c_MailDomain"
 
 $ADUPN = $ADMail
-
-
-
-
 
 #Clean Username
 $prestring = @'
@@ -677,7 +752,9 @@ try {
 catch {
     Write-au2matorLog -Type ERROR -Text "Failed to create User"
     $ErrorCount = 1
-    $AdditionalHTML = "<br>Failed to create User<br>"
+    $AdditionalHTML = "<br>Failed to create User
+    <br>
+    Error: $Error"
 }
 
 
@@ -695,35 +772,29 @@ else {
     $au2matorReturn = "Fehler bei der Erstellung des Users, Error: $Error"
     $Status = "ERROR"
 }
+#endregion CustomCode
 #endregion Script
 
-
 #region Return
-## return to au2mator Services
-
 
 
 Write-au2matorLog -Type INFO -Text "Service finished"
-
-
 
 if ($SendMailToInitiatedByUser) {
     Write-au2matorLog -Type INFO -Text "Send Mail to Initiated By User"
 
     $UserInput = Get-UserInput -RequestID $RequestId
-    $HTML = Get-MailContent -RequestID $RequestId -RequestTitle $Service -EndDate $UserInput.ApprovedTime -TargetUserId $TargetUserId -InitiatedBy $InitiatedBy -Status $Status -PortalURL $PortalURL -RequestedBy $InitiatedBy -AdditionalHTML $AdditionalHTML -InputHTML $UserInput.html
-    Send-ServiceMail -HTMLBody $HTML -RequestID $RequestId -Recipient "$($UserInput.MailInitiatedBy)" -RequestStatus $Status -ServiceName $Service
+    $HTML = Get-MailContent -RequestID $RequestId -RequestTitle $Service -EndDate $UserInput.ApprovedTime -TargetUserId $UserInput.TargetUserId -InitiatedBy $UserInput.InitiatedBy -Status $Status -PortalURL $PortalURL  -AdditionalHTML $AdditionalHTML -InputHTML $UserInput.html
+    Send-ServiceMail -HTMLBody $HTML -RequestID $RequestId -Recipient $($UserInput.MailInitiatedBy) -RequestStatus $Status -ServiceName $Service
 }
-
 
 if ($SendMailToTargetUser) {
     Write-au2matorLog -Type INFO -Text "Send Mail to Target User"
 
     $UserInput = Get-UserInput -RequestID $RequestId
-    $HTML = Get-MailContent -RequestID $RequestId -RequestTitle $Service -EndDate $UserInput.ApprovedTime -TargetUserId $TargetUserId -InitiatedBy $InitiatedBy -Status $Status -PortalURL $PortalURL -RequestedBy $InitiatedBy -AdditionalHTML $AdditionalHTML -InputHTML $UserInput.html
-    Send-ServiceMail -HTMLBody $HTML -RequestID $RequestId -Recipient "$($UserInput.MailTarget)" -RequestStatus $Status -ServiceName $Service
+    $HTML = Get-MailContent -RequestID $RequestId -RequestTitle $Service -EndDate $UserInput.ApprovedTime -TargetUserId $UserInput.TargetUserId -InitiatedBy $UserInput.InitiatedBy -Status $Status -PortalURL $PortalURL -AdditionalHTML $AdditionalHTML -InputHTML $UserInput.html
+    Send-ServiceMail -HTMLBody $HTML -RequestID $RequestId -Recipient $($UserInput.MailTarget) -RequestStatus $Status -ServiceName $Service
 }
-
 
 return $au2matorReturn
 #endregion Return
