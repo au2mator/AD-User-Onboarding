@@ -6,7 +6,7 @@
 #
 # v 1.0 Initial Release
 # v 1.1 Added Stored Credentials
-#       see for details: https://au2mator.com/documentation/powershell-credentials/?utm_source=github&utm_medium=social&utm_campaign=AD_UserOnboarding&utm_content=PS1
+#       see for details: https://click.au2mator.com/PSCreds/?utm_source=github&utm_medium=social&utm_campaign=AD_UserOnboarding&utm_content=PS1
 # v 1.1 Added SMTP Port
 # v 1.2 applied v1.3 Template, code designs, Powershell 7 ready, au2mator 4.0
 #
@@ -103,7 +103,7 @@ $DoImportPSSession = $false
 [string]$LogPath = "C:\_SCOworkingDir\TFS\PS-Services\AD - User Onboarding"
 [string]$LogfileName = "User Onboarding"
 
-[string]$CredentialStorePath = "C:\_SCOworkingDir\TFS\PS-Services\CredentialStore" #see for details: https://au2mator.com/documentation/powershell-credentials/?utm_source=github&utm_medium=social&utm_campaign=AD_UserOnboarding&utm_content=PS1
+[string]$CredentialStorePath = "C:\_SCOworkingDir\TFS\PS-Services\CredentialStore" #see for details: https://click.au2mator.com/PSCreds/?utm_source=github&utm_medium=social&utm_campaign=AD_UserOnboarding&utm_content=PS1
 
 
 $Modules = @("ActiveDirectory") #$Modules = @("ActiveDirectory", "SharePointPnPPowerShellOnline")
@@ -126,7 +126,7 @@ $SMTPSender = "SelfService@au2mator.com"
 $SMTPPort="587"
 
 # Stored Credentials
-# See: https://au2mator.com/documentation/powershell-credentials/?utm_source=github&utm_medium=social&utm_campaign=AD_UserOnboarding&utm_content=PS1
+# See: https://click.au2mator.com/PSCreds/?utm_source=github&utm_medium=social&utm_campaign=AD_UserOnboarding&utm_content=PS1
 $SMTPCredential_method = "Stored" #Stored, Manual
 $SMTPcredential_File = "SMTPCreds.xml"
 $SMTPUser = ""
@@ -574,7 +574,7 @@ $ADUPN = $ADMail
 
 #Clean Username
 $prestring = @'
-ß;ö;ü;ä;à;á;é;è;ó;ò;ú;ù;í;ì;
+ï¿½;ï¿½;ï¿½;ï¿½;ï¿½;ï¿½;ï¿½;ï¿½;ï¿½;ï¿½;ï¿½;ï¿½;ï¿½;ï¿½;
 '@;
 $poststring = @'
 ss;oe;ue;ae;a;a;e;e;o;o;u;u;i;i;
