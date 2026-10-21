@@ -6,7 +6,7 @@
 #
 # v 1.0 Initial Release
 # v 1.1 Added Stored Credentials
-#       see for details: https://click.au2mator.com/PSCreds/?utm_source=github&utm_medium=social&utm_campaign=AD_UserOnboarding&utm_content=PS1
+#       see for details: https://au2mator.com/documentation/powershell-credentials/?utm_source=github&utm_medium=social&utm_campaign=AD_UserOnboarding&utm_content=PS1
 # v 1.1 Added SMTP Port
 # v 1.2 applied v1.3 Template, code designs, Powershell 7 ready, au2mator 4.0
 #
@@ -103,16 +103,16 @@ $DoImportPSSession = $false
 [string]$LogPath = "C:\_SCOworkingDir\TFS\PS-Services\AD - User Onboarding"
 [string]$LogfileName = "User Onboarding"
 
-[string]$CredentialStorePath = "C:\_SCOworkingDir\TFS\PS-Services\CredentialStore" #see for details: https://click.au2mator.com/PSCreds/?utm_source=github&utm_medium=social&utm_campaign=AD_UserOnboarding&utm_content=PS1
+[string]$CredentialStorePath = "C:\_SCOworkingDir\TFS\PS-Services\CredentialStore" #see for details: https://au2mator.com/documentation/powershell-credentials/?utm_source=github&utm_medium=social&utm_campaign=AD_UserOnboarding&utm_content=PS1
 
 
 $Modules = @("ActiveDirectory") #$Modules = @("ActiveDirectory", "SharePointPnPPowerShellOnline")
 
 
 ## au2mator Settings
-[string]$PortalURL = "http://demo01.au2mator.local"
-[string]$au2matorDBServer = "demo01"
-[string]$au2matorDBName = "au2mator40Demo2"
+[string]$PortalURL = "http://AVMSRV002.au2mator.local"
+[string]$au2matorDBServer = "AVMSRV002"
+[string]$au2matorDBName = "au2mator40Demo"
 
 ## Control Mail
 $SendMailToInitiatedByUser = $true #Send a Mail after Service is completed
@@ -126,7 +126,7 @@ $SMTPSender = "SelfService@au2mator.com"
 $SMTPPort="587"
 
 # Stored Credentials
-# See: https://click.au2mator.com/PSCreds/?utm_source=github&utm_medium=social&utm_campaign=AD_UserOnboarding&utm_content=PS1
+# See: https://au2mator.com/documentation/powershell-credentials/?utm_source=github&utm_medium=social&utm_campaign=AD_UserOnboarding&utm_content=PS1
 $SMTPCredential_method = "Stored" #Stored, Manual
 $SMTPcredential_File = "SMTPCreds.xml"
 $SMTPUser = ""
@@ -557,7 +557,7 @@ Write-au2matorLog -Type INFO -Text "Start Custom Code"
 Write-au2matorLog -Type INFO -Text "Define all Values"
 
 $ADPassword="SuperSaf3Pass!"
-$AzureADSyncServer="demo01"
+$AzureADSyncServer="AVMSRV002"
 
 $ADFirstName = $c_Firstname
 $ADLastName = $c_LastName
@@ -574,7 +574,7 @@ $ADUPN = $ADMail
 
 #Clean Username
 $prestring = @'
-�;�;�;�;�;�;�;�;�;�;�;�;�;�;
+ß;ö;ü;ä;à;á;é;è;ó;ò;ú;ù;í;ì;
 '@;
 $poststring = @'
 ss;oe;ue;ae;a;a;e;e;o;o;u;u;i;i;
@@ -606,7 +606,10 @@ $ADZip=(Get-ADOrganizationalUnit -Identity $c_Location).Postalcode
 $ADCity=(Get-ADOrganizationalUnit -Identity $c_Location).Name
 $ADCountry=(Get-ADOrganizationalUnit -Identity $c_Location).country
 
-
+#AD Creds
+$ADActionUserName="User"
+$ADActionPassword="Password"
+$ADcredential = New-Object System.Management.Automation.PSCredential($ADActionUserName,(ConvertTo-SecureString $ADActionPassword -AsPlainText -Force))
 
 
 $ADCompany = "au2mator.com"
@@ -617,50 +620,50 @@ $ADDestOU = $DestOU
 Write-au2matorLog -Type INFO -Text "Try to create the  User"
 
 try {
-    $NewUser = New-ADUser -UserPrincipalName $ADUPN -Path $c_Location -Country $ADCountry -GivenName $ADFirstName -Surname $ADLastName -SamAccountName $ADUsername -Name $ADName -DisplayName $ADDisplayName -Description $ADDescription -AccountPassword (ConvertTo-SecureString $ADPassword -AsPlainText -force) -Enabled $true -PassThru 
+    $NewUser = New-ADUser -UserPrincipalName $ADUPN -Path $c_Location -Country $ADCountry -GivenName $ADFirstName -Surname $ADLastName -SamAccountName $ADUsername -Name $ADName -DisplayName $ADDisplayName -Description $ADDescription -AccountPassword (ConvertTo-SecureString $ADPassword -AsPlainText -force) -Enabled $true -PassThru -Credential $ADcredential   
     Write-au2matorLog -Type INFO -Text "New User created"
 
     try {
-        $NewUser | Set-ADUser -Office $ADOffice
-        $NewUser | Set-ADUser -StreetAddress $ADStreet 
-        $NewUser | Set-ADUser -PostalCode $ADZip 
-        $NewUser | Set-ADUser -City $ADCity 
-        
+        $NewUser | Set-ADUser -Office $ADOffice -Credential $ADcredential
+        $NewUser | Set-ADUser -StreetAddress $ADStreet -Credential $ADcredential
+        $NewUser | Set-ADUser -PostalCode $ADZip -Credential $ADcredential
+        $NewUser | Set-ADUser -City $ADCity -Credential $ADcredential
+        $NewUser | Set-ADUser -Country $ADCountry -Credential $ADcredential
         
         Write-au2matorLog -Type INFO -Text "User updated with Adresse Details"
 
 
         try {
-            $NewUser | Set-ADUser -fax $ADFax 
-            $NewUser | Set-ADUser -MobilePhone $ADMobile 
-            $NewUser | Set-ADUser -OfficePhone $ADTelephone 
+            $NewUser | Set-ADUser -fax $ADFax -Credential $ADcredential
+            $NewUser | Set-ADUser -MobilePhone $ADMobile -Credential $ADcredential
+            $NewUser | Set-ADUser -OfficePhone $ADTelephone -Credential $ADcredential
             
             Write-au2matorLog -Type INFO -Text "User updated with Phone Details"
 
             try {
-                $NewUser | Set-ADUser -Title $ADJobTitle 
-                $NewUser | Set-ADUser -Department $ADDepartment 
-                $NewUser | Set-ADUser -Company $ADCompany 
-                $NewUser | Set-ADUser -Manager $ADManager 
-                $NewUser | Set-ADUser -EmailAddress $ADMail
+                $NewUser | Set-ADUser -Title $ADJobTitle -Credential $ADcredential  
+                $NewUser | Set-ADUser -Department $ADDepartment -Credential $ADcredential
+                $NewUser | Set-ADUser -Company $ADCompany -Credential $ADcredential
+                $NewUser | Set-ADUser -Manager $ADManager -Credential $ADcredential
+                $NewUser | Set-ADUser -EmailAddress $ADMail -Credential $ADcredential
                 Write-au2matorLog -Type INFO -Text "User updated with Advanced Details"
 
                 try {
                     foreach ($Adgroup in $ADGroups) {
                         Write-au2matorLog -Type INFO -Text "Try to add User to Group: $Adgroup"
-                        Add-ADGroupMember -Identity $Adgroup -Members $NewUser
+                        Add-ADGroupMember -Identity $Adgroup -Members $NewUser -Credential $ADcredential
                     }
 
 
 
                     if ($c_Office365License -eq "Office 365 E3") {
                         Write-au2matorLog -Type INFO -Text "Try to add User to Group: LIC-O365_E3"
-                        Add-ADGroupMember -Identity "LIC-O365_E3" -Members $NewUser
+                        Add-ADGroupMember -Identity "LIC-O365_E3" -Members $NewUser -Credential $ADcredential
                     }
 
                     if ($c_Office365License -eq "Office 365 F3") {
                         Write-au2matorLog -Type INFO -Text "Try to add User to Group: LIC-O365_F3"
-                        Add-ADGroupMember -Identity "LIC-O365_F3" -Members $NewUser
+                        Add-ADGroupMember -Identity "LIC-O365_F3" -Members $NewUser -Credential $ADcredential
                     }
 
 
@@ -705,7 +708,7 @@ try {
 
                         }
                         catch {
-                            Write-au2matorLog -Type ERROR -Text "failed to set Office 365 Properties: $ADUPN"
+                            Write-au2matorLog -Type ERROR -Text "failed to set Office 365 Properties: $ADUPN , Error: $_"
                             $ErrorCount = 1
                             $AdditionalHTML = "<br>failed to set Office 365 Properties: $ADUPN<br>"
                         }
@@ -713,7 +716,7 @@ try {
 
                     }
                     catch {
-                        Write-au2matorLog -Type ERROR -Text "failed to run Azure AD Sync: $ADUPN"
+                        Write-au2matorLog -Type ERROR -Text "failed to run Azure AD Sync: $ADUPN , Error: $_"
                         $ErrorCount = 1
                         $AdditionalHTML = "<br>failed to run Azure AD Sync: $ADUPN<br>"
                     }
@@ -721,28 +724,28 @@ try {
 
                 }
                 catch {
-                    Write-au2matorLog -Type ERROR -Text "failed to add User to Group: $Adgroup"
+                    Write-au2matorLog -Type ERROR -Text "failed to add User to Group: $Adgroup , Error: $_"
                     $ErrorCount = 1
                     $AdditionalHTML = "<br>failed to add User to Group: $Adgroup<br>"
                 }
 
             }
             catch {
-                Write-au2matorLog -Type ERROR -Text "Failed to update Advanced Details"
+                Write-au2matorLog -Type ERROR -Text "Failed to update Advanced Details, Error: $_"
                 $ErrorCount = 1
                 $AdditionalHTML = "<br>Failed to update Advanced Details<br>"
             }
 
         }
         catch {
-            Write-au2matorLog -Type INFO -Text "Failed to update Phone Details"
+            Write-au2matorLog -Type INFO -Text "Failed to update Phone Details, Error: $_"
             $ErrorCount = 1
             $AdditionalHTML = "<br>Failed to update Phone Details<br>"
         }
 
     }
     catch {
-        Write-au2matorLog -Type ERROR -Text "Failed to update User Adresse Details"
+        Write-au2matorLog -Type ERROR -Text "Failed to update User Adresse Details, Error: $_"
         $ErrorCount = 1
         $AdditionalHTML = "<br>Failed to update User Adresse Details<br>"
     }
@@ -750,7 +753,7 @@ try {
 
 }
 catch {
-    Write-au2matorLog -Type ERROR -Text "Failed to create User"
+    Write-au2matorLog -Type ERROR -Text "Failed to create User, Error: $_"
     $ErrorCount = 1
     $AdditionalHTML = "<br>Failed to create User
     <br>
